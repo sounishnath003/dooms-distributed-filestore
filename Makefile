@@ -6,3 +6,6 @@ build:
 
 run: build
 	./bin/dooms-store.bin
+
+test: build
+	go test ./... -v --race
