@@ -8,8 +8,16 @@ import (
 )
 
 func main() {
-	fmt.Println("i am running dooms-distributed-filestore")
-	tr := transport.NewTCPTransport(":3000")
+	fmt.Println("dooms-distributed-filestore initiated...")
+
+	tcpOpts := transport.TCPTransportOpts{
+		ListenAddr:    ":3000",
+		Decoder:       transport.DefaultDecoder{},
+		HandShakeFunc: transport.NOPHandshakeFunc,
+	}
+	fmt.Print("TCPTransportOpts configuration=", tcpOpts)
+
+	tr := transport.NewTCPTransport(tcpOpts)
 	if err := tr.ListenAndAcceptConn(); err != nil {
 		log.Fatal(err)
 	}

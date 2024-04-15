@@ -23,20 +23,23 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	}
 }
 
+type TCPTransportOpts struct {
+	ListenAddr    string
+	HandShakeFunc HandShakeFunc
+	Decoder       Decoder
+}
+
 type TCPTransport struct {
-	ListenAddr string
-	listener   net.Listener
-	shakeHands HandShakeFunc // ACK utility handshakes
-	decoder    Decoder
+	TCPTransportOpts
+	listener net.Listener
 
 	mu    sync.RWMutex
 	peers map[net.Addr]Peer
 }
 
-func NewTCPTransport(listenAddr string) *TCPTransport {
+func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
 	return &TCPTransport{
-		ListenAddr: listenAddr,
-		shakeHands: NOPHandshakeFunc,
+		TCPTransportOpts: opts,
 	}
 }
 
@@ -64,25 +67,27 @@ func (t *TCPTransport) startAcceptLoop() error {
 	}
 }
 
-func (t *TCPTransport) handleConn(conn net.Conn) error {
+type Temp struct{}
+
+func (t *TCPTransport) handleConn(conn net.Conn) {
 	slog.Info("new incoming connection - %v\n", conn)
 
 	peer := NewTCPPeer(conn, true)
-	if err := t.shakeHands(peer); err != nil {
+	if err := t.HandShakeFunc(peer); err != nil {
 		// drop connection actually!!
 		peer.conn.Close()
 		slog.Error("TCP error has been occured during the handshaking")
-		return ErrInvalidHandshakeMessage
+		return
 	}
 
-	buf := make([]byte, 4096) // Allocate a buffer of 4KB
 	// Read loop
+	msg := &Message{}
 	for {
-		if err := t.decoder.Decode(conn, buf); err != nil {
-			slog.Error("TCP error - %s\n", err)
+		if err := t.Decoder.Decode(conn, msg); err != nil {
+			slog.Error("TCP error occured: %s\n", err)
 			continue
 		}
+		slog.Info("new message has been received: %+v\n", slog.String("message", string(msg.Payload)))
 	}
 
-	return nil
 }

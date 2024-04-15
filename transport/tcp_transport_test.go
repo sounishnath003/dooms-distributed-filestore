@@ -8,7 +8,11 @@ import (
 
 func TestTCPTransport(t *testing.T) {
 	listerAddr := ":4000"
-	tr := NewTCPTransport(listerAddr)
+	tr := NewTCPTransport(TCPTransportOpts{
+		ListenAddr:    ":4000",
+		HandShakeFunc: NOPHandshakeFunc,
+		Decoder:       GOBDecoder{},
+	})
 
 	assert.Equal(t, tr.ListenAddr, listerAddr)
 
