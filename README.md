@@ -13,6 +13,9 @@ Dooms Filestore - is an implementation of distributed filestore system. Which wo
 - Support for transport message:
   ![basic transport message](assets/transport-message.png)
 
+- OnPeer Close() accidentaly (Node failure case)
+  ![alt text](assets/on-peer-fail.png)
+
 ## Project setup
 
 - To run the project locally

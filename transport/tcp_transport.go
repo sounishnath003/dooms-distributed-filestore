@@ -1,10 +1,17 @@
 package transport
 
 import (
-	"log/slog"
+	"log"
 	"net"
 	"sync"
 )
+
+type TCPTransportOpts struct {
+	ListenAddr    string
+	HandShakeFunc HandShakeFunc
+	Decoder       Decoder
+	OnPeer        func(Peer) error
+}
 
 // represents the remote node connection established over TCP transport
 type TCPPeer struct {
@@ -16,6 +23,11 @@ type TCPPeer struct {
 	outbound bool
 }
 
+// Close implements the Peer Interface
+func (p *TCPPeer) Close() error {
+	return p.conn.Close()
+}
+
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
 		conn:     conn,
@@ -23,15 +35,10 @@ func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	}
 }
 
-type TCPTransportOpts struct {
-	ListenAddr    string
-	HandShakeFunc HandShakeFunc
-	Decoder       Decoder
-}
-
 type TCPTransport struct {
 	TCPTransportOpts
 	listener net.Listener
+	rpcch    chan RPC
 
 	mu    sync.RWMutex
 	peers map[net.Addr]Peer
@@ -40,7 +47,15 @@ type TCPTransport struct {
 func NewTCPTransport(opts TCPTransportOpts) *TCPTransport {
 	return &TCPTransport{
 		TCPTransportOpts: opts,
+		rpcch:            make(chan RPC, 3),
 	}
+}
+
+// Consume implements the Transform interface
+// which will only return Read-only channel , for reading incoming msgs received from
+// another peer or network nodes
+func (t *TCPTransport) Consume() <-chan RPC {
+	return t.rpcch
 }
 
 func (t *TCPTransport) ListenAndAcceptConn() error {
@@ -49,7 +64,7 @@ func (t *TCPTransport) ListenAndAcceptConn() error {
 	if err != nil {
 		return err
 	}
-	slog.Info("listener ln=%+v ...\n", t.listener)
+	log.Printf("listener ln=%+v ...\n", t.listener)
 	// invoking the accep loop - infinite acceptance looping
 	go t.startAcceptLoop()
 	return nil
@@ -59,7 +74,7 @@ func (t *TCPTransport) startAcceptLoop() error {
 	for {
 		conn, err := t.listener.Accept()
 		if err != nil {
-			slog.Error("TCP: accept error has occured %s\n", err)
+			log.Println("TCP: accept error has occured", err)
 			return err
 		}
 		// handle the conn
@@ -67,27 +82,40 @@ func (t *TCPTransport) startAcceptLoop() error {
 	}
 }
 
-type Temp struct{}
-
 func (t *TCPTransport) handleConn(conn net.Conn) {
-	slog.Info("new incoming connection - %v\n", conn)
+	var err error
+	defer func() {
+		log.Println("dropping peer connection:", err)
+		conn.Close()
+	}()
+
+	log.Printf("new incoming connection - %v\n", conn)
 
 	peer := NewTCPPeer(conn, true)
-	if err := t.HandShakeFunc(peer); err != nil {
+	if err = t.HandShakeFunc(peer); err != nil {
 		// drop connection actually!!
 		peer.conn.Close()
-		slog.Error("TCP error has been occured during the handshaking")
 		return
 	}
 
-	// Read loop
-	msg := &Message{}
-	for {
-		if err := t.Decoder.Decode(conn, msg); err != nil {
-			slog.Error("TCP error occured: %s\n", err)
-			continue
+	if t.OnPeer != nil {
+		if err = t.OnPeer(peer); err != nil {
+			log.Println("TCP error has been occured during the handshaking")
+			return
 		}
-		slog.Info("new message has been received: %+v\n", slog.String("message", string(msg.Payload)))
+	}
+
+	// Read loop
+	rpc := RPC{From: conn.RemoteAddr()}
+	for {
+		err := t.Decoder.Decode(conn, &rpc)
+		if err != nil {
+			log.Println("TCP read occured", err)
+			return
+		}
+
+		log.Printf("message = %+v\n", rpc)
+		t.rpcch <- rpc
 	}
 
 }
