@@ -20,6 +20,24 @@ func TestPathTransformFunc(t *testing.T) {
 	assert.Equal(t, expectedOriginalKey, pathKey.Filename)
 }
 
+func TestDelete(t *testing.T) {
+	opts := &StorageOpts{
+		PathTransformFunc: CASPathTransformFunc,
+	}
+	log.Printf("storage options: %+v\n", opts)
+
+	// Store initalization
+	s := NewStorage(*opts)
+	key := "phototobedeleted"
+	data := []byte("some jpg bytes")
+
+	if err := s.writeStream(key, bytes.NewBuffer(data)); err != nil {
+		t.Error(err)
+	}
+
+	s.Delete(key)
+}
+
 func TestStorage(t *testing.T) {
 	opts := &StorageOpts{
 		PathTransformFunc: CASPathTransformFunc,
