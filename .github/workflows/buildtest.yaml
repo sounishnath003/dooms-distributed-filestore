@@ -16,7 +16,7 @@ jobs:
           go-version: ^1.22.1
 
       - name: build
-        run: make build
+        run: go build -o dooms.bin main.go
 
       - name: test
         run: make test
