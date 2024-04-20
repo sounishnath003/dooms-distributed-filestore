@@ -40,6 +40,14 @@ type PathKey struct {
 
 type PathTransformFunc func(string) PathKey
 
+func (p PathKey) FirstPathname() string {
+	paths := strings.Split(p.Pathname, "/")
+	if len(paths) == 0 {
+		return ""
+	}
+	return paths[0]
+}
+
 func (p PathKey) FullPath() string {
 	return fmt.Sprintf("%s/%s", p.Pathname, p.Filename)
 }
@@ -73,6 +81,24 @@ func NewStorage(opts StorageOpts) *Storage {
 	}
 }
 
+func (s *Storage) Has(key string) bool {
+	pathKey := s.PathTransformFunc(key)
+	fi, err := os.Stat(pathKey.FullPath())
+	if err != nil {
+		return false
+	}
+	log.Printf("info the target file: %s\n", fi)
+	return true
+}
+
+func (s *Storage) Delete(key string) error {
+	pathKey := s.PathTransformFunc(key)
+	defer func() {
+		log.Printf("deleted [%s] from the disk", s.Root + "/" + pathKey.Pathname)
+	}()
+	return os.RemoveAll(s.Root + "/" + pathKey.FirstPathname())
+}
+
 func (s *Storage) Read(key string) (io.Reader, error) {
 	f, err := s.readStream(key)
 	if err != nil {
@@ -93,18 +119,19 @@ func (s *Storage) Read(key string) (io.Reader, error) {
 
 func (s *Storage) readStream(key string) (io.ReadCloser, error) {
 	pathKey := s.PathTransformFunc(key)
-	return os.Open(pathKey.FullPath())
+	return os.Open(s.Root + "/" + pathKey.FullPath())
 }
 
 func (s *Storage) writeStream(key string, r io.Reader) error {
 	pathKey := s.PathTransformFunc(key)
 
-	if err := os.MkdirAll(pathKey.Pathname, os.ModePerm); err != nil {
+	if err := os.MkdirAll(s.Root+"/"+pathKey.Pathname, os.ModePerm); err != nil {
 		log.Printf("make directory creation error: %s\n", err)
 		return err
 	}
 
-	fullPath := pathKey.FullPath()
+	fullPath := s.Root + "/" + pathKey.FullPath()
+	log.Print("printing the fullPath = ", fullPath)
 
 	f, err := os.Create(fullPath)
 	if err != nil {
