@@ -1,6 +1,6 @@
 # Dooms Distributed Filestore
 
-vol: 2.12.25
+vol: 2.57.46
 Note: This project is in building stage currently!
 
 Dooms Filestore - is an implementation of distributed filestore system. Which works and supports multiple `Transport` networking layers (OSI-5) methods like TCP, UDP, Sockets, GRPC etc. currently.
